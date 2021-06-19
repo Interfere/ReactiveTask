@@ -29,7 +29,7 @@ class TaskSpec: QuickSpec {
 				})
 				.wait()
 
-			expect(result.error).to(beNil())
+			expect(try result.get()).notTo(throwError())
 			expect(isLaunched) == true
 		}
 
@@ -46,7 +46,7 @@ class TaskSpec: QuickSpec {
 				.single()
 
 			expect(result).notTo(beNil())
-			if let data = result?.value {
+      if case let .success(data) = result {
 				expect(String(data: data, encoding: .utf8)).to(equal("foobar\n"))
 			}
 		}
@@ -63,7 +63,7 @@ class TaskSpec: QuickSpec {
 				.single()
 
 			expect(result).notTo(beNil())
-			expect(result?.error).notTo(beNil())
+      expect(try result?.get()).to(throwError())
 			expect(String(data: aggregated, encoding: .utf8)).to(equal("stat: not-a-real-file: stat: No such file or directory\n"))
 		}
 
@@ -72,11 +72,11 @@ class TaskSpec: QuickSpec {
 			let data = strings.map { $0.data(using: .utf8)! }
 
 			let result = Task("/usr/bin/sort").launch(standardInput: SignalProducer(data))
-				.filterMap { event in event.value }
+        .compactMap { event in event.value }
 				.single()
 
 			expect(result).notTo(beNil())
-			if let data = result?.value {
+      if case let .success(data) = result {
 				expect(String(data: data, encoding: .utf8)).to(equal("bar\nbuzz\nfoo\nfuzz\n"))
 			}
 		}
@@ -87,11 +87,13 @@ class TaskSpec: QuickSpec {
 				.wait()
 
 			expect(result).notTo(beNil())
-			expect(result.error).notTo(beNil())
-			expect(result.error) == TaskError.shellTaskFailed(task, exitCode: 1, standardError: "stat: not-a-real-file: stat: No such file or directory\n")
-			if let error = result.error {
-				expect(error.description) == "A shell task (/usr/bin/stat not-a-real-file) failed with exit code 1:\nstat: not-a-real-file: stat: No such file or directory\n"
-			}
+      switch result {
+        case let .failure(error):
+          expect(error) == TaskError.shellTaskFailed(task, exitCode: 1, standardError: "stat: not-a-real-file: stat: No such file or directory\n")
+          expect(error.description) == "A shell task (/usr/bin/stat not-a-real-file) failed with exit code 1:\nstat: not-a-real-file: stat: No such file or directory\n"
+        case .success:
+          fail("Error expected")
+      }
 		}
 	}
 }
